@@ -1,0 +1,1000 @@
+#파생변수 생성 process#########################################################
+select<-read.csv("project.csv")
+str(select)
+select$gender<-as.factor(select$gender)
+select$TYPE<-as.factor(select$TYPE)
+str(select)
+
+#결측치 확인
+sum(is.na(select))
+
+#가변수화
+select <- transform(select,
+                        gender = ifelse(gender=='1',1,0)
+)
+
+str(select)
+
+library(dplyr)
+library(caret)
+library(adabag)
+library(rpart)
+
+##사용자의 운동 동작 자세 인식에 주요 부분인 14 개 지점의 3차원 (X, Y, Z) 관절 (Skeleton) 정보만을 운동 자세 특징 표현에 사용 (논문 내용)
+
+##인접한 관절 사이 각도 구하기
+select1<-select[,-c(1,2)]
+str(select1)
+View(select1)
+
+# 관절 DataFrame 만들기
+#어깨 척추
+SS<-select1%>%select(starts_with("SpineShoulder"))
+SS<-as.data.frame(SS)                     
+head(SS)
+
+#척추 중간
+SB<-select1%>%select(starts_with("SpineBase"))
+SB<-as.data.frame(SB)                     
+head(SB)
+
+#오른쪽 손
+HR<-select1%>%select(starts_with("HandRight"))
+HR<-as.data.frame(HR)                     
+head(HR)
+
+#오른쪽 팔꿈치
+ER<-select1%>%select(starts_with("ElbowRight"))
+ER<-as.data.frame(ER)                     
+head(ER)
+
+#오른쪽 어깨
+SR<-select1%>%select(starts_with("ShoulderRight"))
+SR<-as.data.frame(SR)                     
+head(SR)
+
+#왼쪽 어깨
+SL<-select1%>%select(starts_with("ShoulderLeft"))
+SL<-as.data.frame(SL)                     
+head(SL)
+
+#왼쪽 팔꿈치
+EL<-select1%>%select(starts_with("ElbowLeft"))
+EL<-as.data.frame(EL)                     
+head(EL)
+
+#왼쪽 손
+HL<-select1%>%select(starts_with("HandLeft"))
+HL<-as.data.frame(HL)                     
+head(HL)
+
+#오른쪽 엉덩이
+PR<-select1%>%select(starts_with("HipRight"))
+PR<-as.data.frame(PR)                     
+head(PR)
+
+#오른쪽 무릎
+KR<-select1%>%select(starts_with("KneeRight"))
+KR<-as.data.frame(KR)                     
+head(KR)
+  
+#오른쪽 발목
+AR<-select1%>%select(starts_with("AnkleRight"))
+AR<-as.data.frame(AR)                     
+head(AR)
+
+#왼쪽 엉덩이
+PL<-select1%>%select(starts_with("HipLeft"))
+PL<-as.data.frame(PL)                     
+head(PL)
+
+#왼쪽 무릎
+KL<-select1%>%select(starts_with("KneeLeft"))
+KL<-as.data.frame(KL)                     
+head(KL)
+
+#왼쪽 발목
+AL<-select1%>%select(starts_with("AnkleLeft"))
+AL<-as.data.frame(AL)                     
+head(AL)
+
+#위벡터
+df<-data.frame(matrix(ncol=90,nrow=dim(AL)[1]))
+df[is.na(df)] <- 0
+df
+df[,seq(2,90,3)]<-1
+UP<-df
+UP
+
+#앞벡터
+df<-data.frame(matrix(ncol=90,nrow=dim(AL)[1]))
+df[is.na(df)] <- 0
+df
+df[,seq(3,90,3)]<-1
+FRONT<-df
+FRONT
+
+## 척추 직립 각도
+u=SS-SB
+v=UP
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- rowSums((df1)^2)
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+SSA=acos(dp/(dis1*dis2))
+dim(SSA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("SSA",as.character(i))
+}
+names(SSA)<-name
+head(SSA)
+
+## 왼쪽 팔꿈치 각도
+u=EL-SL
+v=HL-EL
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+ELA=acos(dp/(dis1*dis2))
+dim(ELA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("ELA",as.character(i))
+}
+names(ELA)<-name
+head(ELA)
+
+## 오른쪽 팔꿈치 각도
+u=ER-SR
+v=HR-ER
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+ERA=acos(dp/(dis1*dis2))
+dim(ERA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("ERA",as.character(i))
+}
+names(ERA)<-name
+head(ERA)
+
+## 왼쪽 어깨 각도
+u=SL-SR
+v=HL-SL
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+SLA=acos(dp/(dis1*dis2))
+dim(SLA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("SLA",as.character(i))
+}
+names(SLA)<-name
+head(SLA)
+
+## 오른쪽 어깨 각도
+u=SR-SL
+v=HR-SR
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+SRA=acos(dp/(dis1*dis2))
+dim(SRA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("SRA",as.character(i))
+}
+names(SRA)<-name
+head(SRA)
+
+## 왼팔 위쪽 각도
+u=HL-SL
+v=UP
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+ULA=acos(dp/(dis1*dis2))
+dim(ULA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("ULA",as.character(i))
+}
+names(ULA)<-name
+head(ULA)
+
+## 오른팔 위쪽 각도
+u=HR-SR
+v=UP
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+URA=acos(dp/(dis1*dis2))
+dim(URA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("URA",as.character(i))
+}
+names(URA)<-name
+head(URA)
+
+## 왼팔 아래쪽 각도
+u=HL-SL
+v=-UP
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+DLA=acos(dp/(dis1*dis2))
+dim(DLA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("ULA",as.character(i))
+}
+names(DLA)<-name
+head(DLA)
+
+## 오른팔 아래쪽 각도
+u=HR-SR
+v=-UP
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+DRA=acos(dp/(dis1*dis2))
+dim(DRA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("DRA",as.character(i))
+}
+names(DRA)<-name
+head(DRA)
+
+## 오른팔 앞쪽 각도
+u=SR-HR
+v=FRONT
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+FLA=acos(dp/(dis1*dis2))
+dim(FLA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("FLA",as.character(i))
+}
+names(FLA)<-name
+head(FLA)
+
+## 오른팔 앞쪽 각도
+u=SR-HR
+v=FRONT
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+FRA=acos(dp/(dis1*dis2))
+dim(FRA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("FRA",as.character(i))
+}
+names(FRA)<-name
+head(FRA)
+
+## 왼쪽 무릎 각도
+u=KL-PL
+v=AL-KL
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+KLA=acos(dp/(dis1*dis2))
+dim(KLA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("KLA",as.character(i))
+}
+names(KLA)<-name
+head(KLA)
+
+## 오른쪽 무릎 각도
+u=KR-PR
+v=-AR-KR
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+KRA=acos(dp/(dis1*dis2))
+dim(KRA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("ULA",as.character(i))
+}
+names(KRA)<-name
+head(KRA)
+
+## 왼다리 아래쪽 각도
+u=AL-PL
+v=-UP
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+LLA=acos(dp/(dis1*dis2))
+dim(LLA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("LLA",as.character(i))
+}
+names(LLA)<-name
+head(LLA)
+
+## 오른다리 아래쪽 각도
+u=AR-PR
+v=-UP
+
+a<-u*v
+head(a)
+
+#내적
+df1 <- a[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dp <- rowSums(df1)
+dp <- as.data.frame(dp)
+head(dp)
+
+for (i in seq(4,90,3)){
+  df2<-a[,c(i:(i+2))]
+  df2 <- rowSums(df2)
+  dp <- cbind(dp, df2)
+  print(dp)
+}
+
+#분모
+df1 <- u[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis1 <- sqrt(rowSums((df1)^2))
+dis1 <- as.data.frame(dis1)
+head(dis1)
+
+for (i in seq(4,90,3)){
+  df2<-u[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis1 <- cbind(dis1, df2)
+  print(dis1)
+}
+
+df1 <- v[,c(1:3)] #1부터 3까지만 X1,Y1,Z1 만
+dis2 <- sqrt(rowSums((df1)^2))
+dis2 <- as.data.frame(dis2)
+head(dis2)
+
+for (i in seq(4,90,3)){
+  df2<-v[,c(i:(i+2))]
+  df2 <- sqrt(rowSums((df2)^2))
+  dis2 <- cbind(dis2, df2)
+  print(dis2)
+}
+
+#각도 구하기
+LRA=acos(dp/(dis1*dis2))
+dim(LRA)
+
+name <- c(rep(0,30))
+for (i in seq(1,30)){
+  name[i]<- paste0("LRA",as.character(i))
+}
+names(LRA)<-name
+head(LRA)
+
+## 왼쪽 오른쪽 손거리
+HD=HL-HR
+name <- c(rep(0,90))
+for (i in seq(1,90)){
+  name[i]<- paste0("HD",as.character(i))
+}
+names(HD)<-name
+head(HD)
+
+## 왼쪽 오른쪽 발거리
+AD=AL-AR
+name <- c(rep(0,90))
+for (i in seq(1,90)){
+  name[i]<- paste0("AD",as.character(i))
+}
+names(AD)<-name
+head(AD)
+
+#파생변수
+select2<-cbind(select$gender,select$TYPE,SSA,ELA,ERA,SLA,SRA,ULA,URA,DLA,DRA,FLA,FRA,KLA,KRA,LLA,LRA,HD,AD)
+
+select3<-select2[,c(1,2)]
+names(select3)<-c("gender","TYPE")
+
+select2<-cbind(select3,select2[,-c(1,2)])
+str(select2)
+
+#데이터 전처리
+#상관관계 높은 변수들 제거
+c_select<-select2[,-c(1,2)]
+correlations <- cor(c_select)
+highCorr <- findCorrelation(correlations, cutoff = .95, names = FALSE)
+highCorr #상관관계 높아 제거해도 되는 변수들 벡터 반환
+c_select <- c_select[, -highCorr]
+select2<-cbind(select2[,c(1,2)],c_select)
+dim(select2)
+
+#최종 모형######################################################################
+
+#부스터나무
+boost<-boosting(TYPE~.,data=select2)
+#pred=predict(boost,newdata,type="class")
+#confusionMatrix(as.factor(pred$class),as.factor(newdata$TYPE),mode="everything")
+

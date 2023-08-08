@@ -1,0 +1,539 @@
+#1######################################################
+#데이터 불러오기
+train<-read.csv("training.csv", header=T)
+test<-read.csv("test.csv", header=T)
+
+#train,test 차원확인
+dim(train) #[1] 5000  785
+dim(test)  #[1] 5000  785
+
+#결측값 확인
+sum(is.na(train)) #0
+sum(is.na(test)) #0
+
+#class label
+table(train[,1])
+table(test[,1])
+#2    3    5    8    9 
+#1000 1000 1000 1000 1000 
+
+options(max.print = 10000)
+
+##-공분산행렬-##
+train.pca<-prcomp(train[,-1])
+attributes(train.pca)
+summary(train.pca)
+
+
+##-상관행렬-##
+train.pcas<-prcomp(train[,-1],scale.=T)
+attributes(train.pcas)
+summary(train.pcas)
+
+##시각화 : 모든 주성분의 수
+par(mfrow = c(1, 2)) 
+plot(train.pca$x[,1:2],col=train[,1])
+sort(train.pca$rotation[,1], decreasing=T)[1:20]
+
+plot(train.pcas$x[,1:2],col=train[,1])
+sort(train.pcas$rotation[,1], decreasing=T)[1:20]
+
+##적절한 주성분 수 
+#누적설명력
+cum_var <- cumsum(train.pca$sdev^2)/sum(train.pca$sdev^2)
+cum_vars <- cumsum(train.pcas$sdev^2)/sum(train.pcas$sdev^2)
+
+plot(1:length(cum_var), cum_var, type = "l", xlab = "주성분 번호", ylab = "누적 설명력", main = "누적 설명력")
+
+plot(1:length(cum_vars), cum_vars, type = "l", xlab = "주성분 번호", ylab = "누적 설명력", main = "누적 설명력")
+
+#임계값
+thresholds <- c(0.7, 0.8, 0.9)
+results <- data.frame(Threshold = thresholds, Components = NA, VarianceExplained = NA)
+
+# 임계값 별로 주성분의 수와 설명력 계산
+for (i in 1:3) {
+  threshold <- thresholds[i]
+  sel_com <- which(cum_var >= threshold)[1]
+  variance_explained <- cum_var[sel_com]
+  results[i, "Components"] <- sel_com
+  results[i, "VarianceExplained"] <- variance_explained
+}
+results
+
+for (i in 1:3) {
+  threshold <- thresholds[i]
+  sel_com <- which(cum_vars >= threshold)[1]
+  variance_explained <- cum_var[sel_com]
+  results[i, "Components"] <- sel_com
+  results[i, "VarianceExplained"] <- variance_explained
+}
+results
+
+
+#중간인 80% 선택
+train_80.pca<-prcomp(train[,-1],rank.=results[2,2])
+train_80.pcas<-prcomp(train[,-1],rank.=results[2,2],scale.=T)
+
+dim(train_80.pca$x)
+dim(train_80.pcas$x)
+
+#Scree plot
+#공분산
+eigenvalues=train.pca$sdev^2
+
+#20씩 기울기 계산
+slope_values <- seq(1, length(eigenvalues), by = 20)
+slope_values
+
+slopes<-c()
+for (i in slope_values) {
+  slope<-(eigenvalues[i+20]-eigenvalues[i])/20
+  slopes<-c(slopes,slope)
+}
+
+#기울기 변화
+rate_slopes<-diff(slopes)
+opt<-which.max(rate_slopes)
+opt<-opt*20+1
+opt #21
+
+# 최적의 주성분의 수 표시 -> 21
+plot(1:length(eigenvalues), eigenvalues, type = "l", xlab = "주성분 번호", ylab = "고윳값",main = "Scree plot", xlim=c(0,200))
+abline(v = opt, col = "red", lty = 2)
+
+train_sc.pca<-prcomp(train[,-1],rank.=opt)
+
+#상관
+eigenvalues=train.pcas$sdev^2
+
+#20씩 기울기 계산
+slope_values <- seq(1, length(eigenvalues), by = 20)
+slope_values
+
+slopes<-c()
+for (i in slope_values) {
+  slope<-(eigenvalues[i+20]-eigenvalues[i])/20
+  slopes<-c(slopes,slope)
+}
+slopes
+
+#기울기 변화
+rate_slopes<-diff(slopes)
+opt<-which.max(rate_slopes)
+opt<-opt*20+1
+opt
+
+# 최적의 주성분의 수 표시 -> 21
+plot(1:length(eigenvalues), eigenvalues, type = "l", xlab = "주성분 번호", ylab = "고윳값",main = "Scree plot", xlim=c(0,200))
+abline(v = opt, col = "red", lty = 2)
+
+train_sc.pcas<-prcomp(train[,-1],rank.=opt,scale.=T)
+
+# 상위 주성분 점수를 이용한 시각화
+par(mfrow = c(2, 2)) 
+#공분산
+plot(train_80.pca$x[,1:2],col=train[,1])
+legend("topright", legend=unique(train[,1]),col=unique(train[,1]),pch=16)
+plot(train_sc.pca$x[,1:2],col=train[,1])
+legend("topright", legend=unique(train[,1]),col=unique(train[,1]),pch=16)
+plot(train_80.pca$x[,462:463],col=train[,1])
+legend("topright", legend=unique(train[,1]),col=unique(train[,1]),pch=16)
+plot(train_sc.pca$x[,20:21],col=train[,1])
+legend("topright", legend=unique(train[,1]),col=unique(train[,1]),pch=16)
+
+#상관
+plot(train_80.pcas$x[,1:2],col=train[,1])
+legend("topright", legend=unique(train[,1]),col=unique(train[,1]),pch=16)
+plot(train_sc.pcas$x[,1:2],col=train[,1])
+legend("topright", legend=unique(train[,1]),col=unique(train[,1]),pch=16)
+plot(train_80.pcas$x[,462:463],col=train[,1])
+legend("topright", legend=unique(train[,1]),col=unique(train[,1]),pch=16)
+plot(train_sc.pcas$x[,20:21],col=train[,1])
+legend("topright", legend=unique(train[,1]),col=unique(train[,1]),pch=16)
+
+#테스트 데이터 주성분 검사
+#공분산
+#훈련 데이터 주성분 점수 계산 비교
+train_scaled<-scale(train[,-1], train.pca$center, train.pca$scale)
+test_scaled<-scale(test[,-1], train.pca$center, train.pca$scale)
+
+train_score1 <- as.data.frame(train.pca$x)
+train_score2<-train_scaled %*% train.pca$rotation
+train_score1[1:10,1:10]
+train_score2[1:10,1:10]
+
+#상위 주성분으로 테스트 데이터 계산
+test_scores1 <- test_scaled %*% train_80.pca$rotation
+test_scores1[1:10]
+
+test_scores2 <- test_scaled %*% train_sc.pca$rotation
+test_scores2[1:10]
+
+#상관
+#훈련 데이터 주성분 점수 계산 비교
+train_scaled<-scale(train[,-1], train.pcas$center, train.pcas$scale)
+test_scaled<-scale(test[,-1], train.pcas$center, train.pcas$scale)
+
+train_score1 <- as.data.frame(train.pcas$x)
+train_score2<-train_scaled %*% train.pcas$rotation
+train_score1[1:10,1:10]
+train_score2[1:10,1:10]
+
+#상위 주성분으로 테스트 데이터 계산
+test_scores3 <- test_scaled %*% train_80.pcas$rotation
+test_scores3[1:10]
+
+test_scores4 <- test_scaled %*% train_sc.pcas$rotation
+test_scores4[1:10]
+
+##테스트 주성분 시각화
+par(mfrow = c(2, 2)) 
+plot(test_scores1[,1:2],col=test[,1])
+plot(test_scores2[,1:2],col=test[,1])
+plot(test_scores3[,1:2],col=test[,1])
+plot(test_scores4[,1:2],col=test[,1])
+
+#2####################################################
+library(MASS)
+library(ggplot2)
+library(e1071)
+library(caret)
+
+#데이터 불러오기
+train<-read.csv("training.csv", header=T)
+test<-read.csv("test.csv", header=T)
+
+#공분산
+train.pca <- prcomp(train[,-1],center=T)
+dim(train.pca$x)
+
+#테스트 목표변수+주성분 점수
+train_new<-c()
+train_new<-cbind(train[,1],train.pca$x)
+colnames(train_new)[1]<-'trny'
+
+# 주성분 결과 적용하여 테스트 데이터의 주성분 계산
+test_centered <- scale(test[,-1], center = train.pca$center, scale = train.pca$scale)
+test_pc_scores <- test_centered %*% train.pca$rotation
+
+#테스트 목표변수+주성분 점수
+test_new<-cbind(test[,1],test_pc_scores)
+colnames(test_new)[1]<-'tsny'
+
+#모든 주성분 분석 사용 - SVM
+model1 <- svm(trny~., data = train_new, kernel='linear', type = "C-classification")
+model2 <- svm(trny~., data = train_new, kernel='polynomial', type = "C-classification")
+model3 <- svm(trny~., data = train_new, kernel='radial', type = "C-classification")
+
+# 분류 모델 평가
+predictions1 <- predict(model1, test_new[,-1])
+predictions2 <- predict(model2, test_new[,-1])
+predictions3 <- predict(model3, test_new[,-1])
+
+#모든 주성분 분석 사용
+#Linear
+confusionMatrix(as.factor(predictions1), as.factor(test[,1]),mode = "everything", positive='1')
+#Polynomial
+confusionMatrix(as.factor(predictions2), as.factor(test[,1]),mode = "everything", positive='1')
+#Radial
+confusionMatrix(as.factor(predictions3), as.factor(test[,1]),mode = "everything", positive='1')
+
+
+# 공분산행렬-k를 변화시키면서 분류 분석 수행: 10%씩
+end<-round(dim(train.pca$x)[2]/10)*10
+len<-seq(end/10,end,end/10)
+len
+
+#Linear
+train_new<-c()
+test_new<-c()
+predictions<-c()
+
+for (k in len) {
+  train_new<-cbind(train[,1],train.pca$x)
+  colnames(train_new)[1]<-'trny'
+  train_sel<-train_new[,c(1:k)]
+  
+  # 주성분 결과 적용하여 테스트 데이터의 주성분 계산
+  test_centered <- scale(test[,-1], center = train.pca$center, scale = train.pca$scale)
+  test_pc_scores <- test_centered %*% train.pca$rotation
+  
+  test_new<-cbind(test[,1],test_pc_scores)
+  colnames(test_new)[1]<-'tsny'
+  test_sel<-test_new[,c(1:k)]
+  
+  model <- svm(trny~., data = train_sel, kernel='linear', type = "C-classification")
+  
+  # 분류 모델 평가
+  predictions <- predict(model, test_sel[,-1])
+  
+  accuracy <- sum(predictions == test[,1]) / length(predictions)  # 분류 정확도 계산
+  
+  # 클래스 수 계산
+  num_classes <- length(unique(test[,1]))
+  
+  # 각 클래스별로 TP, FP, FN 계산
+  tp <- numeric(num_classes)
+  fp <- numeric(num_classes)
+  fn <- numeric(num_classes)
+  
+  actual<-test[,1]
+  for (i in c(2,3,5,8,9)) {
+    tp[i] <- sum(actual == i & predictions == i)
+    fp[i] <- sum(actual != i & predictions == i)
+    fn[i] <- sum(actual == i & predictions != i)
+  }
+  
+  
+  # 정밀도 계산
+  precision <- tp / (tp + fp)
+  precision<-precision[c(2,3,5,8,9)]
+  
+  # 재현율 계산
+  recall <- tp / (tp + fn)
+  recall<-recall[c(2,3,5,8,9)]
+  
+  # F-1 점수 계산
+  f1_score <- (2 * precision * recall) / (precision + recall)
+  
+  
+  # 결과 출력
+  cat("Number of principal components:", k,"\n","| Accuracy:", accuracy, "\n")
+  cat("| Precision:", precision, "\n")
+  cat("| Recall:", recall, "\n")
+  cat("| F1-score:", f1_score, "\n")
+}
+
+#Polynomial
+train_new<-c()
+test_new<-c()
+predictions<-c()
+
+for (k in len) {
+  train_new<-cbind(train[,1],train.pca$x)
+  colnames(train_new)[1]<-'trny'
+  train_sel<-train_new[,c(1:k)]
+  
+  # 주성분 결과 적용하여 테스트 데이터의 주성분 계산
+  test_centered <- scale(test[,-1], center = train.pca$center, scale = train.pca$scale)
+  test_pc_scores <- test_centered %*% train.pca$rotation
+  
+  test_new<-cbind(test[,1],test_pc_scores)
+  colnames(test_new)[1]<-'tsny'
+  test_sel<-test_new[,c(1:k)]
+  
+  model <- svm(trny~., data = train_sel, kernel='polynomial', type = "C-classification")
+  
+  # 분류 모델 평가
+  predictions <- predict(model, test_sel[,-1])
+  
+  accuracy <- sum(predictions == test[,1]) / length(predictions)  # 분류 정확도 계산
+  
+  # 클래스 수 계산
+  num_classes <- length(unique(test[,1]))
+  
+  # 각 클래스별로 TP, FP, FN 계산
+  tp <- numeric(num_classes)
+  fp <- numeric(num_classes)
+  fn <- numeric(num_classes)
+  
+  actual<-test[,1]
+  for (i in c(2,3,5,8,9)) {
+    tp[i] <- sum(actual == i & predictions == i)
+    fp[i] <- sum(actual != i & predictions == i)
+    fn[i] <- sum(actual == i & predictions != i)
+  }
+  
+  
+  # 정밀도 계산
+  precision <- tp / (tp + fp)
+  precision<-precision[c(2,3,5,8,9)]
+  
+  # 재현율 계산
+  recall <- tp / (tp + fn)
+  recall<-recall[c(2,3,5,8,9)]
+  
+  # F-1 점수 계산
+  f1_score <- 2 * precision * recall / (precision + recall)
+  
+  
+  # 결과 출력
+  cat("Number of principal components:", k,"\n","| Accuracy:", accuracy, "\n")
+  cat("| Precision:", precision, "\n")
+  cat("| Recall:", recall, "\n")
+  cat("| F1-score:", f1_score, "\n")
+}
+
+#Radial
+train_new<-c()
+test_new<-c()
+predictions<-c()
+
+for (k in len) {
+  train_new<-cbind(train[,1],train.pca$x)
+  colnames(train_new)[1]<-'trny'
+  train_sel<-train_new[,c(1:k)]
+  
+  # 주성분 결과 적용하여 테스트 데이터의 주성분 계산
+  test_centered <- scale(test[,-1], center = train.pca$center, scale = train.pca$scale)
+  test_pc_scores <- test_centered %*% train.pca$rotation
+  
+  test_new<-cbind(test[,1],test_pc_scores)
+  colnames(test_new)[1]<-'tsny'
+  test_sel<-test_new[,c(1:k)]
+  
+  model <- svm(trny~., data = train_sel, kernel='radial', type = "C-classification")
+  
+  # 분류 모델 평가
+  predictions <- predict(model, test_sel[,-1])
+  
+  accuracy <- sum(predictions == test[,1]) / length(predictions)  # 분류 정확도 계산
+  
+  # 클래스 수 계산
+  num_classes <- length(unique(test[,1]))
+  
+  # 각 클래스별로 TP, FP, FN 계산
+  tp <- numeric(num_classes)
+  fp <- numeric(num_classes)
+  fn <- numeric(num_classes)
+  
+  actual<-test[,1]
+  for (i in c(2,3,5,8,9)) {
+    tp[i] <- sum(actual == i & predictions == i)
+    fp[i] <- sum(actual != i & predictions == i)
+    fn[i] <- sum(actual == i & predictions != i)
+  }
+  
+  
+  # 정밀도 계산
+  precision <- tp / (tp + fp)
+  precision<-precision[c(2,3,5,8,9)]
+  
+  # 재현율 계산
+  recall <- tp / (tp + fn)
+  recall<-recall[c(2,3,5,8,9)]
+  
+  # F-1 점수 계산
+  f1_score <- 2 * precision * recall / (precision + recall)
+  
+  
+  # 결과 출력
+  cat("Number of principal components:", k,"\n","| Accuracy:", accuracy, "\n")
+  cat("| Precision:", precision, "\n")
+  cat("| Recall:", recall, "\n")
+  cat("| F1-score:", f1_score, "\n")
+}
+
+#3#############################################
+#데이터 불러오기
+train<-read.csv("training.csv", header=T)
+df<-train[,-1]
+df<-df[,c(1:10)]
+
+trnx<-as.matrix(df)
+row<-nrow(trnx)
+col<-ncol(trnx)
+
+k_means<-function(data,k){
+  set.seed(1805)
+  sample<-sample(row,k,replace=FALSE)
+  w<-data[sample,]
+  temp<-w
+  w2<-0
+  while(identical(w,w2)==F){
+    w<-temp
+    Gdata<-disW(data,w,row,k)
+    w2<-divG(Gdata,w,k,row,col)
+    temp<-w2
+  }
+  size<-0
+  wss<-0
+  
+  for(i in 1:k){
+    size[i]<-length(which(Gdata[,col+1]==i))
+    
+  }
+  wss<-wss_cal(Gdata,w,k)
+  
+  cat("K-means clustering with",k,"clusters of sizes:",size)
+  cat("\n","Clustering vector:","\n",Gdata[,col+1])
+  cat("\n","wss:",wss)
+  Gdata;
+}
+
+#최단거리 계산
+disW<-function(data,w,row,k){
+  gNum<-0
+  dis<-0
+  for(i in 1:row){
+    for(j in 1:k){
+      dis[j]<-dist(rbind(data[i,],w[j,]))
+    }
+    gNum[i]<-which.min(dis)
+  }
+  Gdata<-cbind(data,gNum)
+  Gdata;
+}
+
+#군집의 평균 구하기
+divG<-function(data,w,k,row,col){
+  group<-col+1
+  for(i in 1:k){
+    for(j in 1:col){
+      if(length(which(data[,group]==i))==0){
+        w[i,j]<-w[i,j]
+      }
+      else if(length(which(data[,group]==i))==1){
+        w[i,j]<-data[which(data[,group]==i),-(group)][j]
+      }else{
+        w[i,j]<-mean(data[which(data[,group]==i),-(group)][,j])
+      }
+    }
+  }
+  w;
+}
+wss_cal<-function(data,w,k){
+  wss<-rep(0,k)
+  group<-col+1
+  for(i in 1:k){
+    cluster_points<-data[data[,group]==i,-(group)]
+    center<-w[i,]
+    wss[i]<-sum(rowSums((cluster_points-center)^2))
+  }
+  wss;
+}
+
+
+#군집 수 : 2
+k2<-2
+k_means_2<-k_means(trnx,k2)
+kmeans_2<-kmeans(trnx,k2)
+#군집 내 크기
+kmeans_2$size
+#군집번호 벡터
+kmeans_2$cluster
+#wss
+kmeans_2$withinss
+
+#군집 수 : 3
+k3<-3
+k_means_3<-k_means(trnx,k3)
+kmeans_3<-kmeans(trnx,k3)
+#군집 내 크기
+kmeans_3$size
+#군집번호 벡터
+kmeans_3$cluster
+#wss
+kmeans_3$withinss
+
+#군집 수 : 4
+k4<-4
+k_means_4<-k_means(trnx,k4)
+kmeans_4<-kmeans(trnx,k4)
+#군집 내 크기
+kmeans_4$size
+#군집번호 벡터
+kmeans_4$cluster
+#wss
+kmeans_4$withinss
